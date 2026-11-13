@@ -1,0 +1,39 @@
+{
+  "name": "backend",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": {
+    "start:dev": "prisma generate --schema ../../prisma/schema.prisma && nest start --watch",
+    "build": "prisma generate --schema ../../prisma/schema.prisma && nest build",
+    "lint": "eslint \"src/**/*.ts\" \"test/**/*.ts\"",
+    "typecheck": "prisma generate --schema ../../prisma/schema.prisma && tsc -p tsconfig.json --noEmit",
+    "test": "prisma generate --schema ../../prisma/schema.prisma && jest --runInBand"
+  },
+  "dependencies": {
+    "@nestjs/common": "12.5.0",
+    "@nestjs/config": "12.1.1",
+    "@nestjs/core": "12.5.0",
+    "@nestjs/platform-express": "12.5.0",
+    "@nestjs/swagger": "12.1.2",
+    "@prisma/client": "7.10.1",
+    "class-transformer": "0.5.1",
+    "class-validator": "0.15.1",
+    "nestjs-pino": "5.3.1",
+    "pino": "10.4.0",
+    "pino-http": "11.0.0",
+    "reflect-metadata": "0.2.2",
+    "rxjs": "7.8.2"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "12.0.13",
+    "@nestjs/schematics": "12.0.13",
+    "@nestjs/testing": "12.5.0",
+    "@types/express": "5.0.6",
+    "@types/jest": "30.0.0",
+    "@types/supertest": "7.2.1",
+    "jest": "30.5.2",
+    "prisma": "7.10.1",
+    "supertest": "7.3.2",
+    "ts-jest": "29.4.15"
+  }
+}

@@ -1,0 +1,461 @@
+generator client {
+  provider = "prisma-client"
+  output   = "./generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserStatus {
+  active
+  blocked
+  deleted
+}
+
+enum MessengerProvider {
+  telegram
+  max
+}
+
+enum PriceListType {
+  system
+  personal
+  organization
+}
+
+enum ItemSource {
+  system
+  personal
+  organization
+  manual
+}
+
+enum EstimateStatus {
+  draft
+  ready
+  sent
+  archived
+}
+
+enum OrganizationRole {
+  owner
+  admin
+  member
+}
+
+// =====================================================
+// USERS
+// =====================================================
+
+model User {
+  id        String     @id @default(uuid()) @db.Uuid
+  email     String?    @db.VarChar(255)
+  phone     String?    @db.VarChar(32)
+  status    UserStatus @default(active)
+  createdAt DateTime   @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime   @updatedAt @map("updated_at") @db.Timestamptz()
+
+  profile             UserProfile?
+  messengerAccounts   MessengerAccount[]
+  organizationsOwned  Organization[]      @relation("OrganizationOwner")
+  organizationMembers OrganizationMember[]
+  priceLists          PriceList[]
+  estimates           Estimate[]
+  conversations       Conversation[]
+  aiRequests          AiRequest[]
+  subscriptions       Subscription[]
+  payments            Payment[]
+  usageRecords        UsageRecord[]
+
+  @@index([status])
+  @@map("users")
+}
+
+model UserProfile {
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String   @unique @map("user_id") @db.Uuid
+  city           String?  @db.VarChar(128)
+  specialization String?  @db.VarChar(255)
+  inn            String?  @db.VarChar(12)
+  ogrn           String?  @db.VarChar(15)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_profiles")
+}
+
+model MessengerAccount {
+  id             String            @id @default(uuid()) @db.Uuid
+  userId         String            @map("user_id") @db.Uuid
+  provider       MessengerProvider
+  externalUserId String            @map("external_user_id") @db.VarChar(64)
+  username       String?           @db.VarChar(128)
+  linkedAt       DateTime          @default(now()) @map("linked_at") @db.Timestamptz()
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, externalUserId])
+  @@index([userId])
+  @@map("messenger_accounts")
+}
+
+// =====================================================
+// ORGANIZATIONS
+// =====================================================
+
+model Organization {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @db.VarChar(255)
+  ownerId   String   @map("owner_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+
+  owner      User                 @relation("OrganizationOwner", fields: [ownerId], references: [id])
+  members    OrganizationMember[]
+  priceLists PriceList[]
+  estimates  Estimate[]
+
+  @@index([ownerId])
+  @@map("organizations")
+}
+
+model OrganizationMember {
+  id             String           @id @default(uuid()) @db.Uuid
+  organizationId String           @map("organization_id") @db.Uuid
+  userId         String           @map("user_id") @db.Uuid
+  role           OrganizationRole @default(member)
+  joinedAt       DateTime         @default(now()) @map("joined_at") @db.Timestamptz()
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@index([userId])
+  @@map("organization_members")
+}
+
+// =====================================================
+// CATALOG
+// =====================================================
+
+model Category {
+  id       String  @id @default(uuid()) @db.Uuid
+  name     String  @db.VarChar(128)
+  slug     String  @unique @db.VarChar(64)
+  parentId String? @map("parent_id") @db.Uuid
+  sort     Int     @default(0)
+
+  parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children Category[] @relation("CategoryTree")
+  services Service[]
+
+  @@index([parentId])
+  @@map("categories")
+}
+
+model Unit {
+  id   String @id @default(uuid()) @db.Uuid
+  code String @unique @db.VarChar(32)
+  name String @db.VarChar(64)
+
+  services       Service[]        @relation("ServiceDefaultUnit")
+  materials      Material[]
+  priceListItems PriceListItem[]
+  estimateItems  EstimateItem[]
+  estimateMaterials EstimateMaterial[]
+
+  @@map("units")
+}
+
+model Region {
+  id   String @id @default(uuid()) @db.Uuid
+  code String @unique @db.VarChar(16)
+  name String @db.VarChar(128)
+
+  priceLists PriceList[]
+  estimates  Estimate[]
+
+  @@map("regions")
+}
+
+model Service {
+  id            String  @id @default(uuid()) @db.Uuid
+  categoryId    String  @map("category_id") @db.Uuid
+  code          String  @unique @db.VarChar(64)
+  name          String  @db.VarChar(255)
+  description   String? @db.Text
+  defaultUnitId String  @map("default_unit_id") @db.Uuid
+  isActive      Boolean @default(true) @map("is_active")
+
+  category       Category         @relation(fields: [categoryId], references: [id])
+  defaultUnit    Unit             @relation("ServiceDefaultUnit", fields: [defaultUnitId], references: [id])
+  priceListItems PriceListItem[]
+  estimateItems  EstimateItem[]
+
+  @@index([categoryId])
+  @@index([isActive])
+  @@map("services")
+}
+
+// =====================================================
+// PRICING
+// =====================================================
+
+model PriceList {
+  id        String        @id @default(uuid()) @db.Uuid
+  ownerId   String        @map("owner_id") @db.Uuid
+  organizationId String?  @map("organization_id") @db.Uuid
+  name      String        @db.VarChar(128)
+  type      PriceListType
+  regionId  String?       @map("region_id") @db.Uuid
+  isDefault Boolean       @default(false) @map("is_default")
+  createdAt DateTime      @default(now()) @map("created_at") @db.Timestamptz()
+
+  owner        User          @relation(fields: [ownerId], references: [id])
+  organization Organization? @relation(fields: [organizationId], references: [id])
+  region       Region?       @relation(fields: [regionId], references: [id])
+  items        PriceListItem[]
+
+  @@index([ownerId])
+  @@index([organizationId])
+  @@index([regionId])
+  @@index([type])
+  @@map("price_lists")
+}
+
+model PriceListItem {
+  id          String    @id @default(uuid()) @db.Uuid
+  priceListId String    @map("price_list_id") @db.Uuid
+  serviceId   String    @map("service_id") @db.Uuid
+  unitId      String    @map("unit_id") @db.Uuid
+  price       Decimal   @db.Decimal(14, 2)
+  currency    String    @default("RUB") @db.Char(3)
+  validFrom   DateTime  @map("valid_from") @db.Date
+  validTo     DateTime? @map("valid_to") @db.Date
+
+  priceList PriceList @relation(fields: [priceListId], references: [id], onDelete: Cascade)
+  service   Service   @relation(fields: [serviceId], references: [id])
+  unit      Unit      @relation(fields: [unitId], references: [id])
+
+  @@index([priceListId])
+  @@index([serviceId])
+  @@map("price_list_items")
+}
+
+// =====================================================
+// ESTIMATES
+// =====================================================
+
+model Estimate {
+  id             String         @id @default(uuid()) @db.Uuid
+  userId         String         @map("user_id") @db.Uuid
+  organizationId String?        @map("organization_id") @db.Uuid
+  title          String         @db.VarChar(255)
+  customerName   String?        @map("customer_name") @db.VarChar(255)
+  locationId     String?        @map("location_id") @db.Uuid
+  status         EstimateStatus @default(draft)
+  workTotal      Decimal        @default(0) @map("work_total") @db.Decimal(14, 2)
+  materialTotal  Decimal        @default(0) @map("material_total") @db.Decimal(14, 2)
+  discountTotal  Decimal        @default(0) @map("discount_total") @db.Decimal(14, 2)
+  grandTotal     Decimal        @default(0) @map("grand_total") @db.Decimal(14, 2)
+  currency       String         @default("RUB") @db.Char(3)
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt      DateTime       @updatedAt @map("updated_at") @db.Timestamptz()
+
+  user         User         @relation(fields: [userId], references: [id])
+  organization Organization? @relation(fields: [organizationId], references: [id])
+  location     Region?      @relation(fields: [locationId], references: [id])
+  items        EstimateItem[]
+  materials    EstimateMaterial[]
+  documents    Document[]
+
+  @@index([userId])
+  @@index([organizationId])
+  @@index([createdAt])
+  @@map("estimates")
+}
+
+model EstimateItem {
+  id          String     @id @default(uuid()) @db.Uuid
+  estimateId  String     @map("estimate_id") @db.Uuid
+  serviceId   String?    @map("service_id") @db.Uuid
+  description String     @db.VarChar(512)
+  quantity    Decimal    @db.Decimal(14, 3)
+  unitId      String     @map("unit_id") @db.Uuid
+  unitPrice   Decimal    @map("unit_price") @db.Decimal(14, 2)
+  totalPrice  Decimal    @map("total_price") @db.Decimal(14, 2)
+  source      ItemSource
+  position    Int
+
+  estimate Estimate @relation(fields: [estimateId], references: [id], onDelete: Cascade)
+  service  Service? @relation(fields: [serviceId], references: [id])
+  unit     Unit     @relation(fields: [unitId], references: [id])
+
+  @@index([estimateId])
+  @@map("estimate_items")
+}
+
+// =====================================================
+// MATERIALS
+// =====================================================
+
+model Material {
+  id       String  @id @default(uuid()) @db.Uuid
+  code     String  @unique @db.VarChar(64)
+  name     String  @db.VarChar(255)
+  unitId   String  @map("unit_id") @db.Uuid
+  isActive Boolean @default(true) @map("is_active")
+
+  unit              Unit               @relation(fields: [unitId], references: [id])
+  estimateMaterials EstimateMaterial[]
+
+  @@index([isActive])
+  @@map("materials")
+}
+
+model EstimateMaterial {
+  id          String     @id @default(uuid()) @db.Uuid
+  estimateId  String     @map("estimate_id") @db.Uuid
+  materialId  String?    @map("material_id") @db.Uuid
+  description String     @db.VarChar(512)
+  quantity    Decimal    @db.Decimal(14, 3)
+  unitId      String     @map("unit_id") @db.Uuid
+  unitPrice   Decimal    @map("unit_price") @db.Decimal(14, 2)
+  totalPrice  Decimal    @map("total_price") @db.Decimal(14, 2)
+  source      ItemSource
+  position    Int
+
+  estimate Estimate  @relation(fields: [estimateId], references: [id], onDelete: Cascade)
+  material Material? @relation(fields: [materialId], references: [id])
+  unit     Unit      @relation(fields: [unitId], references: [id])
+
+  @@index([estimateId])
+  @@map("estimate_materials")
+}
+
+// =====================================================
+// CONVERSATIONS & AI
+// =====================================================
+
+model Conversation {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages   Message[]
+  aiRequests AiRequest[]
+
+  @@index([userId])
+  @@map("conversations")
+}
+
+model Message {
+  id             String   @id @default(uuid()) @db.Uuid
+  conversationId String   @map("conversation_id") @db.Uuid
+  role           String   @db.VarChar(32) // user | assistant | system | tool
+  content        String   @db.Text
+  messageType    String   @map("message_type") @db.VarChar(32)
+  metadata       Json?    @db.JsonB
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@index([createdAt])
+  @@map("messages")
+}
+
+model AiRequest {
+  id               String   @id @default(uuid()) @db.Uuid
+  provider         String   @db.VarChar(64)
+  model            String   @db.VarChar(64)
+  userId           String?  @map("user_id") @db.Uuid
+  conversationId   String?  @map("conversation_id") @db.Uuid
+  promptTokens     Int      @map("prompt_tokens")
+  completionTokens Int      @map("completion_tokens")
+  estimatedCost    Decimal  @map("estimated_cost") @db.Decimal(14, 6)
+  processingTimeMs Int      @map("processing_time_ms")
+  status           String   @db.VarChar(32)
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  user         User?         @relation(fields: [userId], references: [id])
+  conversation Conversation? @relation(fields: [conversationId], references: [id])
+
+  @@index([userId])
+  @@index([conversationId])
+  @@index([createdAt])
+  @@map("ai_requests")
+}
+
+// =====================================================
+// DOCUMENTS
+// =====================================================
+
+model Document {
+  id          String   @id @default(uuid()) @db.Uuid
+  estimateId  String   @map("estimate_id") @db.Uuid
+  type        String   @db.VarChar(32) // pdf
+  url         String   @db.VarChar(512)
+  version     Int      @default(1)
+  generatedAt DateTime @default(now()) @map("generated_at") @db.Timestamptz()
+
+  estimate Estimate @relation(fields: [estimateId], references: [id], onDelete: Cascade)
+
+  @@index([estimateId])
+  @@map("documents")
+}
+
+// =====================================================
+// SUBSCRIPTIONS & MONETIZATION (базовые, расширим позже)
+// =====================================================
+
+model Subscription {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  plan      String    @db.VarChar(32) // free | start | pro
+  status    String    @db.VarChar(32) // active | cancelled | expired
+  startsAt  DateTime  @map("starts_at") @db.Timestamptz()
+  endsAt    DateTime? @map("ends_at") @db.Timestamptz()
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("subscriptions")
+}
+
+model Payment {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  amount     Decimal  @db.Decimal(14, 2)
+  currency   String   @default("RUB") @db.Char(3)
+  status     String   @db.VarChar(32)
+  provider   String   @db.VarChar(64)
+  externalId String?  @map("external_id") @db.VarChar(128)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("payments")
+}
+
+model UsageRecord {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  metric    String   @db.VarChar(64) // estimates_created | ai_requests
+  amount    Int      @default(0)
+  period    String   @db.VarChar(16) // YYYY-MM
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, metric, period])
+  @@index([userId])
+  @@map("usage_records")
+}

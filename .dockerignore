@@ -1,0 +1,11 @@
+node_modules
+dist
+.git
+.github
+.env
+.env.local
+coverage
+.turbo
+apps/*/node_modules
+packages/*/node_modules
+prisma/migrations/dev.db
