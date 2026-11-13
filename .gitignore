@@ -4,3 +4,6 @@ dist
 .env.local
 coverage
 .turbo
+/prisma/generated/
+*.log
+prisma/migrations/dev.db
