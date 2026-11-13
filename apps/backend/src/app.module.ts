@@ -3,6 +3,8 @@ import { ConfigModule } from '@nestjs/config';
 import { LoggerModule } from 'nestjs-pino';
 import { PrismaModule } from './database/prisma.module';
 import { HealthModule } from './health/health.module';
+import { RedisModule } from './modules/redis/redis.module';
+import { AuthModule } from './modules/auth/auth.module';
 
 @Module({
   imports: [
@@ -18,6 +20,8 @@ import { HealthModule } from './health/health.module';
     }),
     PrismaModule,
     HealthModule,
+    RedisModule,
+    AuthModule,
   ],
 })
 export class AppModule {}

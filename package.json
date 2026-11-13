@@ -11,7 +11,6 @@
     "typecheck": "pnpm -r --if-present exec tsc -p tsconfig.json --noEmit",
     "test": "pnpm -r --if-present run test",
     "format": "prettier --write .",
-
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
@@ -19,12 +18,26 @@
     "db:seed": "prisma db seed"
   },
   "devDependencies": {
+    "@prisma/adapter-pg": "^7.10.1",
     "@types/node": "26.6.6",
+    "@types/passport-jwt": "^4.0.1",
+    "@types/pg": "^8.23.1",
     "dotenv": "^18.0.10",
     "eslint": "10.14.0",
+    "pg": "^8.23.1",
     "prettier": "3.10.1",
     "prisma": "7.10.1",
+    "tsx": "^4.23.15",
     "typescript": "7.0.2",
-    "typescript-eslint": "8.72.2"
+    "typescript-eslint": "8.72.2",
+    "zod": "^4.6.7"
+  },
+  "dependencies": {
+    "@nestjs/jwt": "^12.0.4",
+    "@nestjs/passport": "^12.0.1",
+    "@prisma/client": "7.10.1",
+    "ioredis": "^6.0.0",
+    "passport": "^0.7.0",
+    "passport-jwt": "^4.0.1"
   }
 }
