@@ -16,7 +16,8 @@ export function configureApp(app: INestApplication): void {
     const config = new DocumentBuilder()
       .setTitle('AI-сметчик')
       .setDescription('HTTP API AI-сметчика')
-      .setVersion('0.0.0')
+      .setVersion('1.0.0')
+      .addBearerAuth()
       .build();
     const document = SwaggerModule.createDocument(app, config);
     SwaggerModule.setup('api/docs', app, document);
