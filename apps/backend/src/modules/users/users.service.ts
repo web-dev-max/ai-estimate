@@ -7,22 +7,32 @@ export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getMe(userId: string) {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      include: { profile: true },
-    });
-    if (!user) throw new NotFoundException('Пользователь не найден');
+    try {
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        include: { profile: true },
+      });
+      if (!user) throw new NotFoundException('Пользователь не найден');
 
-    const { ...safeUser } = user;
-    return safeUser;
+      const { ...safeUser } = user;
+      return safeUser;
+    } catch (error) {
+      console.error('ОШИБКА В getMe:', error);
+      throw error;
+    }
   }
 
   async updateMe(userId: string, data: UpdateUserDto) {
-    await this.prisma.user.update({
-      where: { id: userId },
-      data,
-    });
-    return this.getMe(userId);
+    try {
+      await this.prisma.user.update({
+        where: { id: userId },
+        data,
+      });
+      return this.getMe(userId);
+    } catch (error) {
+      console.error('ОШИБКА В updateMe:', error);
+      throw error;
+    }
   }
 
   async getProfile(userId: string) {
@@ -39,10 +49,15 @@ export class UsersService {
   }
 
   async updateProfile(userId: string, data: UpdateProfileDto) {
-    return this.prisma.userProfile.upsert({
-      where: { userId },
-      update: data,
-      create: { userId, ...data },
-    });
+    try {
+      return this.prisma.userProfile.upsert({
+        where: { userId },
+        update: data,
+        create: { userId, ...data },
+      });
+    } catch (error) {
+      console.error('ОШИБКА В updateProfile:', error);
+      throw error;
+    }
   }
 }

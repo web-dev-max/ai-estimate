@@ -76,12 +76,17 @@ export class PriceResolverService {
   }
 
   private toResolved(item: IToResolved, source: PriceSource): IResolvedPrice {
-    return {
-      found: true,
-      price: item.price,
-      currency: item.currency,
-      source,
-      priceListItemId: item.id,
-    };
+    try {
+      return {
+        found: true,
+        price: item.price,
+        currency: item.currency,
+        source,
+        priceListItemId: item.id,
+      };
+    } catch (error) {
+      console.error('ОШИБКА В price-resolver.service.toResolved:', error);
+      throw error;
+    }
   }
 }

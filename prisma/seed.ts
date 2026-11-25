@@ -1,5 +1,5 @@
 // prisma/seed.ts
-import { PrismaClient } from './generated/prisma/client';
+import { PrismaClient } from '../apps/backend/src/database/generated/prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import * as dotenv from 'dotenv';
 
@@ -152,84 +152,185 @@ async function main() {
     create: { email: 'system@ai-smeta.local', status: 'active' },
   });
 
-  // 6. Системный прайс-лист (Москва) с реальными ценами
-  const systemPriceListMoscow = await prisma.priceList.upsert({
-    where: { id: '00000000-0000-0000-0000-000000000001' },
-    update: {},
-    create: {
-      id: '00000000-0000-0000-0000-000000000001',
-      ownerId: systemUser.id,
-      name: 'Системный справочник (Москва)',
-      type: 'system',
-      regionId: regionMap['77'], // Код Москвы
-      isDefault: true,
-    },
-  });
-
-  // 7. Системный прайс-лист (Краснодар) — с чуть меньшими ценами
-  const systemPriceListKrasnodar = await prisma.priceList.upsert({
-    where: { id: '00000000-0000-0000-0000-000000000002' },
-    update: {},
-    create: {
-      id: '00000000-0000-0000-0000-000000000002',
-      ownerId: systemUser.id,
-      name: 'Системный справочник (Краснодар)',
-      type: 'system',
-      regionId: regionMap['23'], // Код Краснодарского края
-      isDefault: true,
-    },
-  });
-
-  // 8. Добавляем РЕАЛЬНЫЕ цены в прайсы (ориентировочные рыночные)
-  const pricesMoscow = [
-    // Отделка
-    { service: 'wall_paint', price: 400.00, unit: 'm2' },
-    { service: 'putty_walls', price: 600.00, unit: 'm2' },
-    { service: 'plaster_walls', price: 900.00, unit: 'm2' },
-    { service: 'tile_install', price: 1500.00, unit: 'm2' },
+  // 6. ЕДИНАЯ книга расценок. Три прайса выводятся из неё — покрытие всегда полное.
+  // Все значения ориентировочные, isVerified = false. Не официальная статистика.
+  const priceBook: Array<{
+    service: string;
+    unit: string;
+    moscow: number;
+    krasnodar: number;
+  }> = [
+    // Ремонт и отделка
+    { service: 'wall_paint',            unit: 'm2',    moscow: 400,  krasnodar: 350 },
+    { service: 'wallpaper_install',     unit: 'm2',    moscow: 350,  krasnodar: 300 },
+    { service: 'tile_install',          unit: 'm2',    moscow: 1500, krasnodar: 1200 },
+    { service: 'putty_walls',           unit: 'm2',    moscow: 600,  krasnodar: 500 },
+    { service: 'plaster_walls',         unit: 'm2',    moscow: 900,  krasnodar: 750 },
     // Электрика
-    { service: 'socket_install', price: 500.00, unit: 'pcs' },
-    { service: 'switch_install', price: 500.00, unit: 'pcs' },
-    { service: 'wiring_install', price: 100.00, unit: 'm_p' },
+    { service: 'socket_install',        unit: 'pcs',   moscow: 500,  krasnodar: 400 },
+    { service: 'switch_install',        unit: 'pcs',   moscow: 500,  krasnodar: 400 },
+    { service: 'wiring_install',        unit: 'm_p',   moscow: 100,  krasnodar: 80 },
+    { service: 'panel_mount',           unit: 'pcs',   moscow: 3500, krasnodar: 3000 },
     // Сантехника
-    { service: 'pipe_install', price: 650.00, unit: 'm_p' },
-    { service: 'toilet_install', price: 2000.00, unit: 'pcs' },
-    { service: 'sink_install', price: 1200.00, unit: 'pcs' },
+    { service: 'pipe_install',          unit: 'm_p',   moscow: 650,  krasnodar: 550 },
+    { service: 'toilet_install',        unit: 'pcs',   moscow: 2000, krasnodar: 1800 },
+    { service: 'sink_install',          unit: 'pcs',   moscow: 1200, krasnodar: 1000 },
+    { service: 'bath_install',          unit: 'pcs',   moscow: 3500, krasnodar: 3000 },
+    // Строительные работы
+    { service: 'brick_masonry',         unit: 'm3',    moscow: 6000, krasnodar: 5000 },
+    { service: 'concrete_pour',         unit: 'm3',    moscow: 4500, krasnodar: 4000 },
+    { service: 'roof_install',          unit: 'm2',    moscow: 1200, krasnodar: 1000 },
+    { service: 'floor_screed',          unit: 'm2',    moscow: 700,  krasnodar: 600 },
     // Мебель
-    { service: 'furniture_assembly', price: 2500.00, unit: 'usl' },
+    { service: 'furniture_assembly',    unit: 'usl',   moscow: 2500, krasnodar: 2000 },
+    { service: 'furniture_install',     unit: 'pcs',   moscow: 1500, krasnodar: 1200 },
     // Клининг
-    { service: 'cleaning_maintenance', price: 120.00, unit: 'm2' },
-    { service: 'cleaning_general', price: 200.00, unit: 'm2' },
-  ];
-  const pricesKrasnodar = [
-    // Чуть ниже московских
-    { service: 'wall_paint', price: 350.00, unit: 'm2' },
-    { service: 'putty_walls', price: 500.00, unit: 'm2' },
-    { service: 'tile_install', price: 1200.00, unit: 'm2' },
-    { service: 'socket_install', price: 400.00, unit: 'pcs' },
-    { service: 'toilet_install', price: 1800.00, unit: 'pcs' },
-    { service: 'cleaning_general', price: 150.00, unit: 'm2' },
+    { service: 'cleaning_maintenance',  unit: 'm2',    moscow: 120,  krasnodar: 100 },
+    { service: 'cleaning_general',      unit: 'm2',    moscow: 200,  krasnodar: 150 },
+    { service: 'cleaning_after_repair', unit: 'm2',    moscow: 250,  krasnodar: 200 },
+    // Грузовые услуги
+    { service: 'loading_works',         unit: 't',     moscow: 3000, krasnodar: 2500 },
+    { service: 'moving_services',       unit: 'hour',  moscow: 1500, krasnodar: 1200 },
+    // Благоустройство
+    { service: 'lawn_mowing',           unit: 'sotka', moscow: 1500, krasnodar: 1200 },
+    { service: 'area_cleaning',         unit: 'sotka', moscow: 2000, krasnodar: 1700 },
+    // Автоуслуги
+    { service: 'auto_repair',           unit: 'hour',  moscow: 2000, krasnodar: 1600 },
+    { service: 'auto_maintenance',      unit: 'hour',  moscow: 1500, krasnodar: 1200 },
   ];
 
-  // Функция для безопасного создания цен (чтобы не дублировать при повторном запуске)
-  const seedPrices = async (priceListId: string, prices: any[]) => {
+  // Проверка полноты: книга обязана покрывать все услуги каталога
+  const missing = Object.keys(serviceMap).filter(
+    (code) => !priceBook.some((p) => p.service === code),
+  );
+  if (missing.length) {
+    throw new Error(`Сид: в книге расценок нет услуг: ${missing.join(', ')}`);
+  }
+
+  const roundTo5 = (v: number) => Math.round(v / 5) * 5;
+  const pick = (key: 'moscow' | 'krasnodar') =>
+    priceBook.map((p) => ({ service: p.service, unit: p.unit, price: p[key] }));
+  const nationalPrices = priceBook.map((p) => ({
+    service: p.service,
+    unit: p.unit,
+    price: roundTo5((p.moscow + p.krasnodar) / 2),
+  }));
+
+  // 7. Идемпотентная запись расценок
+  const seedPrices = async (
+    priceListId: string,
+    prices: Array<{ service: string; price: number; unit: string }>,
+    isVerified = false,
+  ) => {
+    const validFrom = new Date('2025-01-01');
     for (const p of prices) {
-      await prisma.priceListItem.create({
-        data: {
-          priceListId,
-          serviceId: serviceMap[p.service],
-          unitId: unitMap[p.unit],
-          price: p.price,
-          validFrom: new Date('2025-01-01'),
-        }
-      }).catch(() => {}); // Игнорируем ошибку уникальности, если такая цена уже есть
+      const serviceId = serviceMap[p.service];
+      const unitId = unitMap[p.unit];
+      if (!serviceId || !unitId) {
+        throw new Error(`Сид: неизвестная услуга "${p.service}" или единица "${p.unit}"`);
+      }
+      await prisma.priceListItem.upsert({
+        where: {
+          priceListId_serviceId_unitId_validFrom: { priceListId, serviceId, unitId, validFrom },
+        },
+        update: { price: p.price, isVerified },
+        create: { priceListId, serviceId, unitId, price: p.price, validFrom, isVerified },
+      });
     }
   };
 
-  await seedPrices(systemPriceListMoscow.id, pricesMoscow);
-  await seedPrices(systemPriceListKrasnodar.id, pricesKrasnodar);
+  // 8. Три системных прайса: Москва, Краснодар, общероссийский (fallback для всех 89 регионов)
+  const systemLists: Array<{
+    id: string;
+    name: string;
+    regionCode: string | null;
+    prices: Array<{ service: string; unit: string; price: number }>;
+  }> = [
+    {
+      id: '00000000-0000-0000-0000-000000000001',
+      name: 'Системный справочник (Москва)',
+      regionCode: '77',
+      prices: pick('moscow'),
+    },
+    {
+      id: '00000000-0000-0000-0000-000000000002',
+      name: 'Системный справочник (Краснодарский край)',
+      regionCode: '23',
+      prices: pick('krasnodar'),
+    },
+    {
+      id: '00000000-0000-0000-0000-000000000003',
+      name: 'Системный справочник (общероссийский, ориентировочный)',
+      regionCode: null,
+      prices: nationalPrices,
+    },
+  ];
 
-  // 9. Тестовый мастер (для проверки Auth и создания смет)
+  for (const list of systemLists) {
+    const regionId = list.regionCode ? regionMap[list.regionCode] : null;
+    if (list.regionCode && !regionId) {
+      throw new Error(`Сид: неизвестный регион "${list.regionCode}"`);
+    }
+    const priceList = await prisma.priceList.upsert({
+      where: { id: list.id },
+      update: { name: list.name, regionId },
+      create: {
+        id: list.id,
+        ownerId: systemUser.id,
+        name: list.name,
+        type: 'system',
+        regionId,
+        isDefault: true,
+      },
+    });
+    await seedPrices(priceList.id, list.prices, false);
+  }
+
+  // 9. Алиасы услуг для Catalog Matcher (этап 3)
+  const aliases: Record<string, string[]> = {
+    tile_install: ['укладка кафеля', 'плитка на пол', 'плитка на стены', 'облицовка плиткой', 'кафель', 'плитка'],
+    wall_paint: ['покрасить стены', 'окраска стен', 'краска стен', 'покраска'],
+    putty_walls: ['шпаклёвка', 'шпаклевка', 'зашпаклевать стены', 'шпатлёвка'],
+    plaster_walls: ['оштукатурить', 'штукатурка', 'штукатурить стены'],
+    floor_screed: ['стяжка', 'стяжка пола', 'залить стяжку', 'выравнивание пола'],
+    wallpaper_install: ['обои', 'поклеить обои', 'оклейка обоями', 'поклейка обоев'],
+    socket_install: ['розетки', 'поставить розетку', 'монтаж розеток', 'розетка'],
+    switch_install: ['выключатель', 'выключатели', 'поставить выключатель'],
+    wiring_install: ['проводка', 'кабель', 'штробление под кабель', 'проложить кабель'],
+    panel_mount: ['электрощит', 'щиток', 'собрать щиток', 'монтаж щита'],
+    pipe_install: ['трубы', 'разводка труб', 'проложить трубы', 'водопровод'],
+    toilet_install: ['унитаз', 'поставить унитаз', 'монтаж унитаза'],
+    sink_install: ['раковина', 'умывальник', 'мойка на кухню', 'поставить раковину'],
+    bath_install: ['ванна', 'поставить ванну', 'монтаж ванны', 'ванну'],
+    brick_masonry: ['кладка кирпича', 'кирпичная кладка', 'выложить кирпичом'],
+    concrete_pour: ['бетон', 'залить бетон', 'бетонирование', 'заливка бетона'],
+    roof_install: ['кровля', 'крыша', 'монтаж кровли', 'перекрыть крышу'],
+    furniture_assembly: ['сборка мебели', 'собрать шкаф', 'сборка шкафа', 'собрать кухню'],
+    furniture_install: ['установить мебель', 'повесить шкаф', 'монтаж мебели'],
+    cleaning_maintenance: ['поддерживающая уборка', 'регулярная уборка'],
+    cleaning_general: ['генеральная уборка', 'генуборка'],
+    cleaning_after_repair: ['уборка после ремонта', 'клининг после ремонта', 'убрать после ремонта'],
+    loading_works: ['погрузка', 'разгрузка', 'грузчики', 'погрузочные работы'],
+    moving_services: ['переезд', 'квартирный переезд', 'перевезти вещи'],
+    lawn_mowing: ['покос', 'покос травы', 'скосить траву', 'трава'],
+    area_cleaning: ['уборка территории', 'убрать участок', 'уборка участка'],
+    auto_repair: ['ремонт автомобиля', 'ремонт машины', 'авторемонт'],
+    auto_maintenance: ['то автомобиля', 'техобслуживание', 'замена масла'],
+  };
+
+  for (const [code, list] of Object.entries(aliases)) {
+    const serviceId = serviceMap[code];
+    if (!serviceId) throw new Error(`Сид: алиас для неизвестной услуги "${code}"`);
+    for (const alias of list) {
+      await prisma.serviceAlias.upsert({
+        where: { alias },
+        update: { serviceId },
+        create: { alias, serviceId },
+      });
+    }
+  }
+
+  // 10. Тестовый мастер + пустой личный прайс (мастер заполняет сам и перекрывает системные цены)
   const testUser = await prisma.user.upsert({
     where: { email: 'master@test.local' },
     update: {},
@@ -247,7 +348,24 @@ async function main() {
     },
   });
 
-  console.log('✅ Засев успешно завершен! Регионы, категории и реальные цены добавлены.');
+  await prisma.priceList.upsert({
+    where: { id: '00000000-0000-0000-0000-000000000010' },
+    update: {},
+    create: {
+      id: '00000000-0000-0000-0000-000000000010',
+      ownerId: testUser.id,
+      name: 'Мой прайс',
+      type: 'personal',
+      regionId: null,
+      isDefault: true,
+    },
+  });
+
+  const counts = await prisma.priceListItem.groupBy({
+    by: ['priceListId'],
+    _count: { _all: true },
+  });
+  console.log(`✅ Сид завершён. Услуг: ${Object.keys(serviceMap).length}, расценок: ${counts.reduce((s, c) => s + c._count._all, 0)}, алиасов: ${Object.values(aliases).flat().length}.`);
 }
 
 main()

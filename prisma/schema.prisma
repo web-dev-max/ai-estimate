@@ -189,6 +189,7 @@ model Service {
   description   String? @db.Text
   defaultUnitId String  @map("default_unit_id") @db.Uuid
   isActive      Boolean @default(true) @map("is_active")
+  aliases       ServiceAlias[]
 
   category       Category         @relation(fields: [categoryId], references: [id])
   defaultUnit    Unit             @relation("ServiceDefaultUnit", fields: [defaultUnitId], references: [id])
@@ -235,11 +236,15 @@ model PriceListItem {
   currency    String    @default("RUB") @db.Char(3)
   validFrom   DateTime  @map("valid_from") @db.Date
   validTo     DateTime? @map("valid_to") @db.Date
+  isVerified  Boolean   @default(false) @map("is_verified")
+  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
 
-  priceList PriceList @relation(fields: [priceListId], references: [id], onDelete: Cascade)
-  service   Service   @relation(fields: [serviceId], references: [id])
-  unit      Unit      @relation(fields: [unitId], references: [id])
+  priceList     PriceList      @relation(fields: [priceListId], references: [id], onDelete: Cascade)
+  service       Service        @relation(fields: [serviceId], references: [id])
+  unit          Unit           @relation(fields: [unitId], references: [id])
+  estimateItems EstimateItem[]
 
+  @@unique([priceListId, serviceId, unitId, validFrom])
   @@index([priceListId])
   @@index([serviceId])
   @@map("price_list_items")
@@ -279,20 +284,23 @@ model Estimate {
 }
 
 model EstimateItem {
-  id          String     @id @default(uuid()) @db.Uuid
-  estimateId  String     @map("estimate_id") @db.Uuid
-  serviceId   String?    @map("service_id") @db.Uuid
-  description String     @db.VarChar(512)
-  quantity    Decimal    @db.Decimal(14, 3)
-  unitId      String     @map("unit_id") @db.Uuid
-  unitPrice   Decimal    @map("unit_price") @db.Decimal(14, 2)
-  totalPrice  Decimal    @map("total_price") @db.Decimal(14, 2)
-  source      ItemSource
-  position    Int
+  id                String  @id @default(uuid()) @db.Uuid
+  estimateId        String  @map("estimate_id") @db.Uuid
+  serviceId         String? @map("service_id") @db.Uuid
+  description       String  @db.VarChar(512)
+  quantity          Decimal @db.Decimal(14, 3)
+  unitId            String  @map("unit_id") @db.Uuid
+  unitPrice         Decimal @map("unit_price") @db.Decimal(14, 2)
+  totalPrice        Decimal @map("total_price") @db.Decimal(14, 2)
+  source            ItemSource
+  priceSourceDetail String? @map("price_source_detail") @db.VarChar(32)
+  priceListItemId   String? @map("price_list_item_id") @db.Uuid
+  position          Int
 
-  estimate Estimate @relation(fields: [estimateId], references: [id], onDelete: Cascade)
-  service  Service? @relation(fields: [serviceId], references: [id])
-  unit     Unit     @relation(fields: [unitId], references: [id])
+  estimate      Estimate       @relation(fields: [estimateId], references: [id], onDelete: Cascade)
+  service       Service?       @relation(fields: [serviceId], references: [id])
+  unit          Unit           @relation(fields: [unitId], references: [id])
+  priceListItem PriceListItem? @relation(fields: [priceListItemId], references: [id])
 
   @@index([estimateId])
   @@map("estimate_items")
@@ -343,6 +351,7 @@ model EstimateMaterial {
 model Conversation {
   id        String   @id @default(uuid()) @db.Uuid
   userId    String   @map("user_id") @db.Uuid
+  state     Json?    @db.JsonB
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()
 
@@ -351,6 +360,7 @@ model Conversation {
   aiRequests AiRequest[]
 
   @@index([userId])
+  @@index([updatedAt])
   @@map("conversations")
 }
 
@@ -458,4 +468,15 @@ model UsageRecord {
   @@unique([userId, metric, period])
   @@index([userId])
   @@map("usage_records")
+}
+
+model ServiceAlias {
+  id        String @id @default(uuid()) @db.Uuid
+  serviceId String @map("service_id") @db.Uuid
+  alias     String @unique @db.VarChar(255)
+
+  service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@index([serviceId])
+  @@map("service_aliases")
 }
