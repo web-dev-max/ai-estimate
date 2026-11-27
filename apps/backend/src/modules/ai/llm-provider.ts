@@ -29,4 +29,4 @@ export interface ILlmProvider {
   ): Promise<ILlmJsonResult<T>>;
 }
 
-export const Llm_PROVIDER = Symbol('Llm_PROVIDER');
+export const LLM_PROVIDER = Symbol('Llm_PROVIDER');

@@ -1,40 +1,35 @@
-# infrastructure/docker/backend/Dockerfile
-FROM node:20-bookworm-slim AS base
+FROM node:24-bookworm-slim AS base
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 RUN corepack enable && corepack prepare pnpm@12.6.0 --activate
-RUN apt-get update && apt-get install -y openssl
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    openssl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
-# --- Builder Stage ---
+# --- Builder ---
 FROM base AS builder
 WORKDIR /app
 
-# Копируем файлы конфигурации воркспейса
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 COPY apps/backend/package.json ./apps/backend/
 COPY packages/shared-types/package.json ./packages/shared-types/
 COPY packages/validation/package.json ./packages/validation/
 COPY packages/api-client/package.json ./packages/api-client/
 
-# Устанавливаем зависимости
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
 
-# Копируем исходники
 COPY . .
 
-# Генерируем Prisma Client (важно для Prisma 7)
 RUN pnpm exec prisma generate
-
-# Собираем NestJS
+RUN pnpm --filter @ai-smeta/validation build
 RUN pnpm --filter backend build
 
-# --- Runner Stage ---
+# --- Runner ---
 FROM base AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 
-# Установка зависимостей для Puppeteer (генерация PDF)
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     fonts-liberation \
     libasound2 \
     libatk-bridge2.0-0 \
@@ -53,15 +48,23 @@ RUN apt-get update && apt-get install -y \
     xdg-utils \
     && rm -rf /var/lib/apt/lists/*
 
-# Копируем сгенерированный Prisma Client и билд
+COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/pnpm-workspace.yaml ./pnpm-workspace.yaml
+COPY --from=builder /app/pnpm-lock.yaml ./pnpm-lock.yaml
 COPY --from=builder /app/node_modules ./node_modules
+
+COPY --from=builder /app/packages ./packages
+
+COPY --from=builder /app/apps/backend/package.json ./apps/backend/package.json
 COPY --from=builder /app/apps/backend/node_modules ./apps/backend/node_modules
 COPY --from=builder /app/apps/backend/dist ./apps/backend/dist
-COPY --from=builder /app/apps/backend/package.json ./apps/backend/
-COPY --from=builder /app/prisma ./prisma
 
-WORKDIR /app/apps/backend
+COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
+
+COPY infrastructure/certs ./infrastructure/certs
+ENV NODE_EXTRA_CA_CERTS=/app/infrastructure/certs/russian_trusted_root_ca.pem
+
 EXPOSE 3000
 
-# Запускаем миграции и стартуем
-CMD ["sh", "-c", "pnpm exec prisma migrate deploy && node dist/main.js"]
+CMD ["sh", "-c", "pnpm exec prisma migrate deploy && node apps/backend/dist/main.js"]

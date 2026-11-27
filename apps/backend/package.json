@@ -3,6 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "scripts": {
+    "deps": "pnpm --dir ../.. exec prisma generate && pnpm --filter @ai-smeta/validation build",
     "dev": "pnpm --dir ../.. exec prisma generate && nest start --watch",
     "build": "pnpm --dir ../.. exec prisma generate && nest build",
     "start": "nest start",
@@ -32,7 +33,8 @@
     "pino-http": "11.0.0",
     "reflect-metadata": "0.2.2",
     "rxjs": "7.8.2",
-    "zod": "^4.6.7"
+    "zod": "^4.6.7",
+    "@ai-smeta/validation": "workspace:*"
   },
   "devDependencies": {
     "@nestjs/cli": "12.0.13",
